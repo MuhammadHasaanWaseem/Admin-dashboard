@@ -14,13 +14,13 @@ const ADMIN_PASSWORD = creads.rootAdmin.password;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return sessionStorage.getItem("admin_auth") === "true";
+    return localStorage.getItem("admin_auth") === "true";
   });
 
   const login = useCallback((email: string, password: string) => {
     if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
       setIsAuthenticated(true);
-      sessionStorage.setItem("admin_auth", "true");
+      localStorage.setItem("admin_auth", "true");
       return { success: true };
     }
     return { success: false, error: "Invalid email or password" };
@@ -28,7 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = useCallback(() => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem("admin_auth");
+    localStorage.removeItem("admin_auth");
   }, []);
 
   return (
