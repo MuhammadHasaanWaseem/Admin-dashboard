@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
+import creads from "@/config/creads.json";
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -8,8 +9,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const ADMIN_EMAIL = "admin123@gmail.com";
-const ADMIN_PASSWORD = "admin123@";
+const ADMIN_EMAIL = creads.rootAdmin.email;
+const ADMIN_PASSWORD = creads.rootAdmin.password;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
