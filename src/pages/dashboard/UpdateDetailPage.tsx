@@ -60,7 +60,7 @@ const UpdateDetailPage = () => {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => { endUpdate(update.id); toast.success("Update ended"); }}>End Update</AlertDialogAction>
+                <AlertDialogAction onClick={async () => { await endUpdate(update.id); toast.success("Update ended"); }}>End Update</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

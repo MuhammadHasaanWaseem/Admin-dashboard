@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, X, Send, AlertCircle } from "lucide-react";
+import { Plus, X, Send, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 const UpdatesPage = () => {
@@ -13,6 +13,7 @@ const UpdatesPage = () => {
   const [subtitle, setSubtitle] = useState("");
   const [features, setFeatures] = useState<string[]>([""]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
 
   const hasActive = updates.some(u => u.status === "active");
 
@@ -30,16 +31,21 @@ const UpdatesPage = () => {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    const success = addUpdate({ title: title.trim(), subtitle: subtitle.trim(), features: features.filter(f => f.trim()) });
-    if (!success) {
-      toast.error("Only one active update allowed. End the current one first.");
-      return;
+    setSubmitting(true);
+    try {
+      const success = await addUpdate({ title: title.trim(), subtitle: subtitle.trim(), features: features.filter(f => f.trim()) });
+      if (!success) {
+        toast.error("Only one active update allowed. End the current one first.");
+        return;
+      }
+      setTitle(""); setSubtitle(""); setFeatures([""]);
+      toast.success("Update published successfully!");
+    } finally {
+      setSubmitting(false);
     }
-    setTitle(""); setSubtitle(""); setFeatures([""]);
-    toast.success("Update published successfully!");
   };
 
   return (
@@ -93,8 +99,9 @@ const UpdatesPage = () => {
               </Button>
             </div>
 
-            <Button type="submit" disabled={hasActive}>
-              <Send className="w-4 h-4 mr-2" /> Publish Update
+            <Button type="submit" disabled={hasActive || submitting}>
+              {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+              Publish Update
             </Button>
           </form>
         </CardContent>

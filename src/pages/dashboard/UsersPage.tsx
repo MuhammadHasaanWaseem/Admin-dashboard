@@ -1,119 +1,241 @@
-import { useState } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { useData } from "@/contexts/DataContext";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Users, ShieldOff, ShieldCheck, Trash2, Mail, Phone, Search } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Users, ShieldOff, ShieldCheck, Trash2, Search } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import styles from "./UsersPage.module.css";
+
+const PAGE_SIZE = 10;
 
 const UsersPage = () => {
-  const { users, toggleUserBlock, removeUser } = useData();
+  const { users, loadingUsers, toggleUserBlock, removeUser } = useData();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
-  const filtered = users.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+  const filtered = users.filter(
+    (u) =>
+      (u.full_name?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
+      (u.username?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
+      u.email.toLowerCase().includes(search.toLowerCase())
   );
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const start = (page - 1) * PAGE_SIZE;
+  const paginated = filtered.slice(start, start + PAGE_SIZE);
+
+  useEffect(() => setPage(1), [search]);
+
+  const displayName = (u: (typeof users)[0]) =>
+    u.full_name?.trim() || u.username?.trim() || u.email || "Unknown";
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Users</h1>
-        <p className="text-muted-foreground text-sm mt-1">Manage registered users</p>
+    <div className={styles.page}>
+      <div className={styles.headerRow}>
+        <div className={styles.header}>
+          <h1 className={styles.title}>Users</h1>
+          <p className={styles.subtitle}>Manage registered users from profiles</p>
+        </div>
+        <div className={styles.stats}>
+          <div className={styles.stat}>
+            <div className={styles.statValue}>{filtered.length}</div>
+            <div className={styles.statLabel}>Total</div>
+          </div>
+        </div>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Search users by name or email..."
+      <div className={styles.searchWrap}>
+        <Search className={styles.searchIcon} />
+        <input
+          type="search"
+          placeholder="Search by name, username or email..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-10"
+          onChange={(e) => setSearch(e.target.value)}
+          className={styles.searchInput}
+          aria-label="Search users"
         />
       </div>
 
-      <div className="grid gap-3">
-        {filtered.map(user => (
-          <Card key={user.id} className="glass-card">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <Users className="w-5 h-5 text-primary" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="font-semibold text-foreground truncate">{user.name}</h4>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {user.email}</span>
-                      <span className="hidden sm:flex items-center gap-1"><Phone className="w-3 h-3" /> {user.phone}</span>
+      <Card className="glass-card overflow-hidden border-0 shadow-sm">
+        <CardContent className="p-4 sm:p-5">
+          {loadingUsers ? (
+            <p className={styles.loading}>Loading users...</p>
+          ) : (
+            <>
+              <div className={styles.cardList}>
+                {paginated.map((user) => (
+                  <article key={user.id} className={styles.userCard}>
+                    {user.profile_picture ? (
+                      <img src={user.profile_picture} alt="" className={styles.avatar} />
+                    ) : (
+                      <div className={styles.avatarPlaceholder}>
+                        <Users className="w-5 h-5" />
+                      </div>
+                    )}
+                    <div className={styles.userMain}>
+                      <h3 className={styles.userName}>{displayName(user)}</h3>
+                      <p className={styles.userMeta}>
+                        {user.email}
+                        {user.location ? ` · ${user.location}` : ""}
+                      </p>
                     </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={cn(
-                    "px-2.5 py-0.5 rounded-full text-xs font-medium capitalize",
-                    user.status === "active" ? "status-active" : "status-blocked"
-                  )}>
-                    {user.status}
-                  </span>
-
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button size="icon" variant="ghost" title={user.status === "active" ? "Block user" : "Unblock user"}>
-                        {user.status === "active" ? <ShieldOff className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{user.status === "active" ? "Block" : "Unblock"} {user.name}?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {user.status === "active"
-                            ? "This user will be blocked and won't be able to access the platform."
-                            : "This user will be unblocked and regain access to the platform."}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => {
-                          toggleUserBlock(user.id);
-                          toast.success(user.status === "active" ? "User blocked" : "User unblocked");
-                        }}>
-                          {user.status === "active" ? "Block" : "Unblock"}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Remove {user.name}?</AlertDialogTitle>
-                        <AlertDialogDescription>This action cannot be undone. The user will be permanently removed.</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => { removeUser(user.id); toast.success("User removed"); }}>
-                          Remove
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
+                    <div className={styles.userRight}>
+                      <span className={user.block ? styles.statusBlocked : styles.statusActive}>
+                        {user.block ? "Blocked" : "Active"}
+                      </span>
+                      <div className={styles.actions}>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button
+                              type="button"
+                              className={`${styles.actionBtn} ${user.block ? styles.actionBtnUnblock : styles.actionBtnBlock}`}
+                              title={user.block ? "Unblock" : "Block"}
+                              aria-label={user.block ? "Unblock" : "Block"}
+                            >
+                              {user.block ? <ShieldCheck className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                {user.block ? "Unblock" : "Block"} {displayName(user)}?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {user.block
+                                  ? "This user will regain access to the platform."
+                                  : "This user will be blocked and won't be able to access the platform."}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={async () => {
+                                  await toggleUserBlock(user.id);
+                                  toast.success(user.block ? "User unblocked" : "User blocked");
+                                }}
+                              >
+                                {user.block ? "Unblock" : "Block"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button
+                              type="button"
+                              className={`${styles.actionBtn} ${styles.actionBtnRemove}`}
+                              aria-label="Remove user"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Remove {displayName(user)}?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will delete the user profile. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={async () => {
+                                  await removeUser(user.id);
+                                  toast.success("User removed");
+                                }}
+                              >
+                                Remove
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </article>
+                ))}
               </div>
-            </CardContent>
-          </Card>
-        ))}
-        {filtered.length === 0 && (
-          <p className="text-center text-muted-foreground py-8">No users found</p>
-        )}
-      </div>
+              {filtered.length > PAGE_SIZE && (
+                <div className={styles.paginationWrap}>
+                  <p className={styles.paginationSummary}>
+                    {start + 1}–{Math.min(start + PAGE_SIZE, filtered.length)} of {filtered.length}
+                  </p>
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (page > 1) setPage((p) => p - 1);
+                          }}
+                          className={page <= 1 ? "pointer-events-none opacity-50" : ""}
+                          aria-disabled={page <= 1}
+                        />
+                      </PaginationItem>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                        .map((p, i, arr) => (
+                          <Fragment key={p}>
+                            {i > 0 && arr[i - 1] !== p - 1 && (
+                              <PaginationItem>
+                                <span className="flex h-9 w-9 items-center justify-center text-muted-foreground">…</span>
+                              </PaginationItem>
+                            )}
+                            <PaginationItem>
+                              <PaginationLink
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setPage(p);
+                                }}
+                                isActive={page === p}
+                              >
+                                {p}
+                              </PaginationLink>
+                            </PaginationItem>
+                          </Fragment>
+                        ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (page < totalPages) setPage((p) => p + 1);
+                          }}
+                          className={page >= totalPages ? "pointer-events-none opacity-50" : ""}
+                          aria-disabled={page >= totalPages}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </>
+          )}
+          {!loadingUsers && filtered.length === 0 && (
+            <p className={styles.empty}>No users found</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

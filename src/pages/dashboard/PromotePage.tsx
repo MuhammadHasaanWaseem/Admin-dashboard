@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
 import { useData } from "@/contexts/DataContext";
+import { uploadPromoImage } from "@/lib/promoStorage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Send, Megaphone, ImagePlus, X, Link } from "lucide-react";
+import { Send, ImagePlus, X, Link, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 const PromotePage = () => {
@@ -17,6 +18,7 @@ const PromotePage = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activePromotions = promotions.filter(p => p.status === "active");
@@ -46,19 +48,33 @@ const PromotePage = () => {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    addPromotion({
-      organizer: organizer.trim(),
-      eventDetails: eventDetails.trim(),
-      additionalInfo: additionalInfo.trim(),
-      url: url.trim() || undefined,
-      imageUrl: imagePreview || undefined,
-    });
-    setOrganizer(""); setEventDetails(""); setAdditionalInfo(""); setUrl("");
-    removeImage();
-    toast.success("Promotion added successfully!");
+    setSubmitting(true);
+    try {
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        const uploaded = await uploadPromoImage(imageFile);
+        if (!uploaded) {
+          toast.error("Image upload failed. Try again.");
+          return;
+        }
+        imageUrl = uploaded;
+      }
+      await addPromotion({
+        organizer: organizer.trim(),
+        eventDetails: eventDetails.trim(),
+        additionalInfo: additionalInfo.trim(),
+        url: url.trim() || undefined,
+        imageUrl,
+      });
+      setOrganizer(""); setEventDetails(""); setAdditionalInfo(""); setUrl("");
+      removeImage();
+      toast.success("Promotion added successfully!");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -118,8 +134,9 @@ const PromotePage = () => {
               )}
             </div>
 
-            <Button type="submit">
-              <Send className="w-4 h-4 mr-2" /> Submit Promotion
+            <Button type="submit" disabled={submitting}>
+              {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+              Submit Promotion
             </Button>
           </form>
         </CardContent>

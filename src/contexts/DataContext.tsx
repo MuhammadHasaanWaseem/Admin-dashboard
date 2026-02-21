@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 export interface Update {
   id: string;
   title: string;
   subtitle: string;
+  description?: string;
   features: string[];
   status: "active" | "ended";
   createdAt: string;
@@ -22,100 +24,195 @@ export interface Promotion {
 
 export interface Organization {
   id: string;
+  owner_id: string;
   name: string;
-  email: string;
-  phone: string;
-  address: string;
-  website: string;
-  description: string;
-  contactPerson: string;
-  type: string;
-  memberCount: number;
-  status: "pending" | "approved" | "rejected";
-  registeredAt: string;
+  ein: string | null;
+  website_url: string | null;
+  mission: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  tags: string[] | null;
+  is_verified: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface User {
   id: string;
-  name: string;
   email: string;
-  phone: string;
-  status: "active" | "blocked";
-  joinedAt: string;
+  full_name: string | null;
+  username: string | null;
+  bio: string | null;
+  profile_picture: string | null;
+  location: string | null;
+  block: boolean;
+  created_at: string;
 }
 
 interface DataContextType {
   updates: Update[];
-  addUpdate: (u: Omit<Update, "id" | "createdAt" | "status">) => boolean;
-  endUpdate: (id: string) => void;
+  loadingUpdates: boolean;
+  addUpdate: (u: Omit<Update, "id" | "createdAt" | "status">) => Promise<boolean>;
+  endUpdate: (id: string) => Promise<void>;
+  refetchUpdates: () => Promise<void>;
   promotions: Promotion[];
-  addPromotion: (p: Omit<Promotion, "id" | "createdAt" | "status">) => void;
-  endPromotion: (id: string) => void;
+  loadingPromotions: boolean;
+  addPromotion: (p: Omit<Promotion, "id" | "createdAt" | "status">) => Promise<void>;
+  endPromotion: (id: string) => Promise<void>;
+  refetchPromotions: () => Promise<void>;
   organizations: Organization[];
-  updateOrgStatus: (id: string, status: "approved" | "rejected") => void;
+  loadingOrgs: boolean;
+  refetchOrgs: () => Promise<void>;
+  setOrgVerified: (id: string, is_verified: boolean) => Promise<void>;
   users: User[];
-  toggleUserBlock: (id: string) => void;
-  removeUser: (id: string) => void;
+  loadingUsers: boolean;
+  refetchUsers: () => Promise<void>;
+  toggleUserBlock: (id: string) => Promise<void>;
+  removeUser: (id: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
 
-const sampleOrgs: Organization[] = [
-  { id: "1", name: "TechCorp Solutions", email: "info@techcorp.com", phone: "+1 555-0101", address: "123 Tech Lane, San Francisco, CA", website: "https://techcorp.com", description: "Leading provider of enterprise software solutions and cloud infrastructure services.", contactPerson: "James Miller", type: "Technology", memberCount: 120, status: "pending", registeredAt: "2025-01-15" },
-  { id: "2", name: "Green Earth NGO", email: "contact@greenearth.org", phone: "+1 555-0102", address: "456 Green St, New York, NY", website: "https://greenearth.org", description: "Environmental conservation organization focused on urban sustainability and reforestation projects.", contactPerson: "Sarah Chen", type: "Non-Profit", memberCount: 45, status: "approved", registeredAt: "2025-01-10" },
-  { id: "3", name: "EduLearn Academy", email: "hello@edulearn.com", phone: "+1 555-0103", address: "789 Edu Ave, Los Angeles, CA", website: "https://edulearn.com", description: "Online education platform offering certified courses in technology and business management.", contactPerson: "Michael Torres", type: "Education", memberCount: 200, status: "pending", registeredAt: "2025-02-01" },
-  { id: "4", name: "HealthPlus Clinic", email: "admin@healthplus.com", phone: "+1 555-0104", address: "321 Health Blvd, Chicago, IL", website: "https://healthplus.com", description: "Multi-specialty healthcare clinic providing telemedicine and in-person consultations.", contactPerson: "Dr. Lisa Wang", type: "Healthcare", memberCount: 35, status: "rejected", registeredAt: "2024-12-20" },
-];
+// profiles table row
+type ProfileRow = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  username: string | null;
+  bio: string | null;
+  profile_picture: string | null;
+  location: string | null;
+  block: boolean | null;
+  created_at: string;
+};
+function mapProfileRow(row: ProfileRow): User {
+  return {
+    id: row.id,
+    email: row.email ?? "",
+    full_name: row.full_name ?? null,
+    username: row.username ?? null,
+    bio: row.bio ?? null,
+    profile_picture: row.profile_picture ?? null,
+    location: row.location ?? null,
+    block: row.block ?? false,
+    created_at: row.created_at,
+  };
+}
 
-const sampleUsers: User[] = [
-  { id: "1", name: "Alice Johnson", email: "alice@example.com", phone: "+1 555-1001", status: "active", joinedAt: "2025-01-05" },
-  { id: "2", name: "Bob Smith", email: "bob@example.com", phone: "+1 555-1002", status: "active", joinedAt: "2025-01-12" },
-  { id: "3", name: "Carol Williams", email: "carol@example.com", phone: "+1 555-1003", status: "blocked", joinedAt: "2025-01-20" },
-  { id: "4", name: "David Brown", email: "david@example.com", phone: "+1 555-1004", status: "active", joinedAt: "2025-02-01" },
-  { id: "5", name: "Eva Martinez", email: "eva@example.com", phone: "+1 555-1005", status: "active", joinedAt: "2025-02-10" },
-];
+// DB row types for Supabase
+type UpdatesRow = { id: string; title: string; subtitle: string | null; description: string | null; features: string[] | null; is_active: boolean; created_at: string };
+type PromotionsRow = { id: string; organizer_name: string; url: string | null; event_details: string; additional_info: string | null; image_url: string | null; is_active: boolean; created_at: string };
+
+function mapUpdateRow(row: UpdatesRow): Update {
+  return { id: row.id, title: row.title, subtitle: row.subtitle ?? "", description: row.description ?? undefined, features: row.features ?? [], status: row.is_active ? "active" : "ended", createdAt: row.created_at };
+}
+function mapPromoRow(row: PromotionsRow): Promotion {
+  return { id: row.id, organizer: row.organizer_name, eventDetails: row.event_details, additionalInfo: row.additional_info ?? "", url: row.url ?? undefined, imageUrl: row.image_url ?? undefined, status: row.is_active ? "active" : "ended", createdAt: row.created_at };
+}
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [updates, setUpdates] = useState<Update[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
-  const [organizations, setOrganizations] = useState<Organization[]>(sampleOrgs);
-  const [users, setUsers] = useState<User[]>(sampleUsers);
+  const [loadingUpdates, setLoadingUpdates] = useState(true);
+  const [loadingPromotions, setLoadingPromotions] = useState(true);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [loadingOrgs, setLoadingOrgs] = useState(true);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
 
-  // Only 1 update can be added at a time (must end previous active one first)
-  const addUpdate = useCallback((u: Omit<Update, "id" | "createdAt" | "status">) => {
+  const refetchUpdates = useCallback(async () => {
+    setLoadingUpdates(true);
+    const { data, error } = await supabase.from("updates").select("id,title,subtitle,description,features,is_active,created_at").order("created_at", { ascending: false });
+    setLoadingUpdates(false);
+    if (!error && data) setUpdates((data as UpdatesRow[]).map(mapUpdateRow));
+  }, []);
+
+  const refetchPromotions = useCallback(async () => {
+    setLoadingPromotions(true);
+    const { data, error } = await supabase.from("promotions").select("id,organizer_name,url,event_details,additional_info,image_url,is_active,created_at").order("created_at", { ascending: false });
+    setLoadingPromotions(false);
+    if (!error && data) setPromotions((data as PromotionsRow[]).map(mapPromoRow));
+  }, []);
+
+  const refetchOrgs = useCallback(async () => {
+    setLoadingOrgs(true);
+    console.log("[Organizations] Fetching from Supabase...");
+    const { data, error } = await supabase.from("organizations").select("*").order("created_at", { ascending: false });
+    console.log("[Organizations] Response:", { data, error, count: data?.length ?? 0 });
+    if (error) console.error("[Organizations] Supabase error:", error.message, error.details);
+    setLoadingOrgs(false);
+    if (!error && data) {
+      setOrganizations((data as Organization[]));
+      console.log("[Organizations] Set state, count:", data.length);
+      if (data.length === 0) console.warn("[Organizations] Got 0 rows. If table has data in Supabase, enable RLS policy for SELECT on 'organizations' (Table → RLS policies).");
+    } else {
+      console.log("[Organizations] No data set (error or empty)");
+    }
+  }, []);
+
+  const refetchUsers = useCallback(async () => {
+    setLoadingUsers(true);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id,email,full_name,username,bio,profile_picture,location,block,created_at")
+      .order("created_at", { ascending: false });
+    setLoadingUsers(false);
+    if (!error && data) setUsers((data as ProfileRow[]).map(mapProfileRow));
+  }, []);
+
+  useEffect(() => { refetchOrgs(); }, [refetchOrgs]);
+  useEffect(() => { refetchUpdates(); }, [refetchUpdates]);
+  useEffect(() => { refetchPromotions(); }, [refetchPromotions]);
+  useEffect(() => { refetchUsers(); }, [refetchUsers]);
+
+  const setOrgVerified = useCallback(async (id: string, is_verified: boolean) => {
+    const { error } = await supabase.from("organizations").update({ is_verified, updated_at: new Date().toISOString() }).eq("id", id);
+    if (!error) setOrganizations(prev => prev.map(o => o.id === id ? { ...o, is_verified, updated_at: new Date().toISOString() } : o));
+  }, []);
+
+  const addUpdate = useCallback(async (u: Omit<Update, "id" | "createdAt" | "status">): Promise<boolean> => {
     const hasActive = updates.some(up => up.status === "active");
     if (hasActive) return false;
-    setUpdates(prev => [{ ...u, id: crypto.randomUUID(), createdAt: new Date().toISOString(), status: "active" }, ...prev]);
+    const { error } = await supabase.from("updates").insert({ title: u.title, subtitle: u.subtitle, description: (u as Update).description ?? null, features: u.features, is_active: true });
+    if (error) return false;
+    await refetchUpdates();
     return true;
-  }, [updates]);
+  }, [updates, refetchUpdates]);
 
-  const endUpdate = useCallback((id: string) => {
-    setUpdates(prev => prev.map(u => u.id === id ? { ...u, status: "ended" as const } : u));
-  }, []);
+  const endUpdate = useCallback(async (id: string) => {
+    await supabase.from("updates").update({ is_active: false, updated_at: new Date().toISOString() }).eq("id", id);
+    await refetchUpdates();
+  }, [refetchUpdates]);
 
-  // Multiple promotions can be active at the same time
-  const addPromotion = useCallback((p: Omit<Promotion, "id" | "createdAt" | "status">) => {
-    setPromotions(prev => [{ ...p, id: crypto.randomUUID(), createdAt: new Date().toISOString(), status: "active" }, ...prev]);
-  }, []);
+  const addPromotion = useCallback(async (p: Omit<Promotion, "id" | "createdAt" | "status">) => {
+    await supabase.from("promotions").insert({ organizer_name: p.organizer, url: p.url ?? null, event_details: p.eventDetails, additional_info: p.additionalInfo ?? null, image_url: p.imageUrl ?? null, is_active: true });
+    await refetchPromotions();
+  }, [refetchPromotions]);
 
-  const endPromotion = useCallback((id: string) => {
-    setPromotions(prev => prev.map(p => p.id === id ? { ...p, status: "ended" as const } : p));
-  }, []);
+  const endPromotion = useCallback(async (id: string) => {
+    await supabase.from("promotions").update({ is_active: false, updated_at: new Date().toISOString() }).eq("id", id);
+    await refetchPromotions();
+  }, [refetchPromotions]);
 
-  const updateOrgStatus = useCallback((id: string, status: "approved" | "rejected") => {
-    setOrganizations(prev => prev.map(o => o.id === id ? { ...o, status } : o));
-  }, []);
+  const toggleUserBlock = useCallback(async (id: string) => {
+    const user = users.find(u => u.id === id);
+    if (!user) return;
+    const newBlock = !user.block;
+    const { error } = await supabase.from("profiles").update({ block: newBlock }).eq("id", id);
+    if (!error) setUsers(prev => prev.map(u => u.id === id ? { ...u, block: newBlock } : u));
+  }, [users]);
 
-  const toggleUserBlock = useCallback((id: string) => {
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, status: u.status === "active" ? "blocked" : "active" } : u));
-  }, []);
-
-  const removeUser = useCallback((id: string) => {
-    setUsers(prev => prev.filter(u => u.id !== id));
+  const removeUser = useCallback(async (id: string) => {
+    const { error } = await supabase.from("profiles").delete().eq("id", id);
+    if (!error) setUsers(prev => prev.filter(u => u.id !== id));
   }, []);
 
   return (
-    <DataContext.Provider value={{ updates, addUpdate, endUpdate, promotions, addPromotion, endPromotion, organizations, updateOrgStatus, users, toggleUserBlock, removeUser }}>
+    <DataContext.Provider value={{ updates, loadingUpdates, addUpdate, endUpdate, refetchUpdates, promotions, loadingPromotions, addPromotion, endPromotion, refetchPromotions, organizations, loadingOrgs, refetchOrgs, setOrgVerified, users, loadingUsers, refetchUsers, toggleUserBlock, removeUser }}>
       {children}
     </DataContext.Provider>
   );

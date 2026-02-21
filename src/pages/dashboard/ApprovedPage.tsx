@@ -1,23 +1,23 @@
 import { useData } from "@/contexts/DataContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Globe, Mail, Users, Calendar } from "lucide-react";
+import { Building2, Globe, Mail, Calendar } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const ApprovedPage = () => {
   const { organizations } = useData();
   const navigate = useNavigate();
-  const approved = organizations.filter(o => o.status === "approved");
+  const approved = organizations.filter((o) => o.is_verified);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Approved Organizations</h1>
-        <p className="text-muted-foreground text-sm mt-1">All approved and active organizations</p>
+        <p className="text-muted-foreground text-sm mt-1">Verified organizations</p>
       </div>
 
       <div className="grid gap-3">
-        {approved.map(org => (
+        {approved.map((org) => (
           <Card
             key={org.id}
             className="glass-card cursor-pointer hover:border-primary/30 transition-colors"
@@ -31,14 +31,17 @@ const ApprovedPage = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-semibold text-foreground">{org.name}</h4>
-                    <Badge variant="outline" className="text-xs">{org.type}</Badge>
+                    {org.ein && <Badge variant="outline" className="text-xs">{org.ein}</Badge>}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{org.description}</p>
+                  {org.mission && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{org.mission}</p>}
                   <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground flex-wrap">
-                    <span className="flex items-center gap-1"><Globe className="w-3 h-3" /> {org.website.replace("https://", "")}</span>
-                    <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {org.email}</span>
-                    <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {org.memberCount} members</span>
-                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {org.registeredAt}</span>
+                    {org.website_url && (
+                      <span className="flex items-center gap-1"><Globe className="w-3 h-3" /> {org.website_url.replace(/^https?:\/\//, "")}</span>
+                    )}
+                    {org.contact_email && (
+                      <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {org.contact_email}</span>
+                    )}
+                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(org.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
               </div>
@@ -46,7 +49,7 @@ const ApprovedPage = () => {
           </Card>
         ))}
         {approved.length === 0 && (
-          <p className="text-center text-muted-foreground py-8">No approved organizations yet</p>
+          <p className="text-center text-muted-foreground py-8">No verified organizations yet</p>
         )}
       </div>
     </div>

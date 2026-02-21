@@ -60,7 +60,7 @@ const PromoteDetailPage = () => {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => { endPromotion(promo.id); toast.success("Promotion ended"); }}>End Promotion</AlertDialogAction>
+                <AlertDialogAction onClick={async () => { await endPromotion(promo.id); toast.success("Promotion ended"); }}>End Promotion</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
